@@ -1279,6 +1279,7 @@ video {
     var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
 }
 
+
 /* Base styles */
 :root {
   --primary-color: #3B82F6;
@@ -1287,6 +1288,29 @@ video {
   --warning-color: #F59E0B;
   --danger-color: #EF4444;
   --background-gradient: linear-gradient(135deg, #EBF4FF 0%, #E6FFFA 100%);
+}
+
+/* Centered box with blue border */
+.heading-box {
+  border: 2px solid grey; /* Blue border */
+  border-radius: 8px; /* Rounded corners */
+  padding: 24px; /* Padding inside the box */
+  background-color: white; /* White background */
+  max-width: 800px; /* Max width of the box */
+  margin: 30px auto; /* Center the box horizontally */
+  text-align: center; /* Center the text */
+
+}
+
+.heading-box h2 {
+  font-size: 2rem; /* Title size */
+  font-weight: bold; /* Bold title */
+  color: #3b82f6; /* Blue color for title */
+}
+
+.heading-box p {
+  font-size: 1.25rem; /* Subtitle size */
+  margin-top: 10px; /* Add some space between title and subtitle */
 }
 
 /* Custom scrollbar */
@@ -1379,46 +1403,47 @@ video {
 }
 
 /* Conversation styles */
+/* Subtle border for all boxes */
+.bg-white, .input-container, .message-user, .message-ai, .conversation-container, .loading-indicator {
+  border: 1px solid #e2e8f0; /* Light gray border */
+  transition: all 0.3s ease;
+}
+
+/* Adding hover effect for message boxes */
+.message-user:hover, .message-ai:hover {
+  border-color: #2563eb; /* Blue border color on hover */
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Add subtle shadow on hover */
+}
+
+/* Subtle border for the input container */
+.input-container {
+  border: 1px solid #e2e8f0; /* Subtle border for input container */
+}
+
+.input-container:hover {
+  border-color: #2563eb; /* Blue border on hover */
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Add subtle shadow */
+}
+
+/* Subtle border for the conversation container */
 .conversation-container {
-  max-height: 500px;
-  overflow-y: auto;
-  padding: 1rem;
-  margin: 1.5rem 0;
-  border-radius: 0.75rem;
-  background: rgba(249, 250, 251, 0.5);
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
 }
 
-.message {
-  margin: 1rem 0;
-  max-width: 80%;
-  animation: fadeIn 0.3s ease;
-}
-
+/* Highlight message bubbles for the user and AI */
 .message-user {
-  margin-left: auto;
-  background: var(--primary-color);
+  border-radius: 10px;
+  background-color: #2563eb;
   color: white;
-  border-radius: 1rem 1rem 0 1rem;
-  padding: 10px;
-  box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.2);
-  text-align: right;
-  max-width: fit-content;
-  margin-top: 25px;
-  margin-bottom: 15px;
 }
 
 .message-ai {
-  margin-right: auto; 
-
-  margin-bottom: 15px;
-  background: white;
-  border: 1px solid rgba(209, 213, 219, 0.3);
-  border-radius: 1rem 1rem 1rem 0;
-  padding: 10px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  text-align: left;
-  max-width: 700px;
+  border-radius: 10px;
+  background-color: #f3f4f6;
+  color: #1a202c;
 }
+
 
 /* Input area styles */
 .input-container {
@@ -1819,23 +1844,29 @@ html, body {
   position: sticky;
   top: 0;
   z-index: 50;
-  background-color: rgba(255, 255, 255, 0.8);
+  width: 100%;
+  background-color: #F5F5DC;
   backdrop-filter: blur(10px);
-  padding: 1rem;
   border-bottom: 1px solid #ddd;
+  margin: 0; /* Ensure no margin */
+  padding: 0; /* Remove default padding */
 }
 
 .nav-container {
   display: flex;
-  justify-content: space-between;
-  padding-left: 2rem;
-  padding-right: 2rem;
+  justify-content: center;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 1rem 0;
 }
 
 .nav-links {
   display: flex;
-  gap: 2rem;
+  gap: 1rem;
   align-items: center;
+  padding: 0 2rem;
+  width: 100%;
+  justify-content: center;
 }
 
 .nav-link {
@@ -1843,6 +1874,7 @@ html, body {
   color: inherit;
   font-weight: bold;
   transition: color 0.3s, transform 0.3s;
+  margin: 0 20px;
 }
 
 .nav-link:hover {
@@ -1854,6 +1886,7 @@ html, body {
   background-color: #2563eb; /* Blue background */
   color: white;
   padding: 0.5rem 1.5rem;
+  margin-left: 10px;
   border-radius: 9999px;
   font-weight: bold;
   transition: all 0.3s;
@@ -1863,4 +1896,17 @@ html, body {
   background-color: #1d4ed8; /* Darker blue hover color */
   box-shadow: 0 4px 12px rgba(29, 78, 216, 0.1);
   transform: scale(1.05);
+}
+
+/* Remove default body margins */
+body {
+  margin: 0;
+  padding: 0;
+}
+
+/* Ensure full width for all pages */
+#webcrumbs {
+  width: 100%;
+  margin: 0;
+  padding: 0;
 }

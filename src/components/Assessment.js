@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import "../style.css";
-import Navbar from './Navbar'; // Import Navbar component
+import Navbar from './Navbar.js'; // Import Navbar component
 
 // Function to parse text and replace *text* with <strong>text</strong>
 const formatMessageContent = (content) => {
@@ -61,11 +61,11 @@ const Assessment = () => {
     };
 
     return (
-        <div className="assessment-container min-h-screen bg-gradient-to-r from-blue-50 to-teal-50 p-6">
-            {/* Navbar component is used here */}
-            <Navbar />
+        <div id="webcrumbs">
+          <Navbar />
 
-            <div className="text-center mb-8 heading-container">
+            {/* Title and Subtitle in a Blue Box */}
+            <div className="heading-box mb-8">
                 <h2>AI Symptom Assessment</h2>
                 <p>Describe your symptoms for a personalized risk analysis</p>
             </div>

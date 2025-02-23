@@ -1,189 +1,113 @@
 import React, { useState, useEffect } from 'react';
 import Chart from 'react-apexcharts';
-import Navbar from './Navbar'; // Import Navbar component
+import Navbar from './Navbar.js'; // Import Navbar component
+import { db } from '../firebase.js'; // Assume you have set up Firebase correctly
 import "../style.css";
+
+// Function to fetch data from Firebase
+const fetchRiskData = async () => {
+  try {
+    const snapshot = await db.collection('riskData').get(); // Assuming you store your risk data in a 'riskData' collection
+    const data = snapshot.docs.map(doc => doc.data());
+    return data;
+  } catch (error) {
+    console.error('Error fetching data from Firebase:', error);
+    return [];
+  }
+};
+
 export default function Dashboard() {
-  const [stats, setStats] = useState({
-    lowRisk: 0,
-    highRisk: 0,
-    riskData: [],
-  });
+  const [riskData, setRiskData] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Simulated API call to fetch dashboard stats from your model
-    const fetchDashboardStats = async () => {
-      try {
-        const response = await fetch('http://localhost:5000/api/dashboard-stats', {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-        });
-        const data = await response.json();
-        setStats({
-          lowRisk: data.lowRisk || 45, // Default to 45% if not provided
-          highRisk: data.highRisk || 15, // Default to 15% if not provided
-          riskData: data.riskData || [30, 40, 35, 50, 49, 60, 70, 91, 125], // Default chart data
-        });
-      } catch (error) {
-        console.error('Error fetching dashboard stats:', error);
-        alert('Error loading dashboard data');
-      }
+    const getRiskData = async () => {
+      const data = await fetchRiskData();
+      setRiskData(data);
+      setIsLoading(false);
     };
-
-    fetchDashboardStats();
+    getRiskData();
   }, []);
 
   const chartOptions = {
     chart: {
+      type: 'bar',
       toolbar: { show: false },
     },
-    stroke: {
-      curve: 'smooth',
-      width: 2,
-    },
-    fill: {
-      type: 'gradient',
-      gradient: {
-        shadeIntensity: 1,
-        opacityFrom: 0.7,
-        opacityTo: 0.3,
-        stops: [0, 90, 100],
+    plotOptions: {
+      bar: {
+        borderRadius: 8,
+        horizontal: false,
       },
     },
     xaxis: {
-      categories: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'],
+      categories: riskData.map(item => item.disease),
     },
-    colors: ['#2563eb'],
+    yaxis: {
+      title: {
+        text: 'Risk Percentage',
+      },
+    },
+    colors: ['#2563eb'], // Blue color for the bars
+    dataLabels: {
+      enabled: true,
+      formatter: (val) => `${val}%`,
+    },
   };
 
-  const chartSeries = [{
-    name: 'Risk Score',
-    data: stats.riskData,
-  }];
+  const chartSeries = [
+    {
+      name: 'Risk Percentage',
+      data: riskData.map(item => item.riskPercentage),
+    },
+  ];
+
+  const handlePrintReport = () => {
+    const reportContent = `
+      Medical Risk Analyzer Report
+      Date: ${new Date().toLocaleDateString()}
+      Diseases and Risk Percentages:
+      ${riskData.map(item => `${item.disease}: ${item.riskPercentage}%`).join('\n')}
+    `;
+    const printWindow = window.open();
+    printWindow.document.write('<pre>' + reportContent + '</pre>');
+    printWindow.print();
+  };
 
   return (
-    <div className="dashboard-container min-h-screen bg-gray-50 p-6">
-      <Navbar /> {/* Include Navbar here */}
+    <div id="webcrumbs">
+      <Navbar />
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <header className="dashboard-header flex justify-between items-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-800">Medical Risk Analyzer Dashboard</h1>
-          <div className="header-actions flex items-center gap-4">
-            <div className="notification relative cursor-pointer">
-              <span className="material-symbols-outlined text-gray-600">notifications</span>
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">3</span>
-            </div>
-            <div className="user-info flex items-center gap-2">
-              <span className="material-symbols-outlined text-gray-600">person</span>
-              <span className="font-medium text-gray-700">Dr. Smith</span>
-            </div>
-          </div>
+        <header className="dashboard-header mb-8">
+          <h1 className="text-2xl font-bold text-gray-800 text-center">Medical Risk Analyzer Dashboard</h1>
         </header>
 
         {/* Main Content */}
-        <main className="dashboard-grid grid grid-cols-2 gap-6">
-          {/* Left Column */}
-          <div className="space-y-6">
-            {/* Risk Assessment Card */}
-            <div className="card bg-white p-6 rounded-xl shadow-sm">
-              <h2 className="card-title text-xl font-semibold mb-4">Patient Risk Assessment</h2>
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="risk-card low bg-green-50 p-4 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined icon text-green-600">trending_down</span>
-                    <div className="content">
-                      <p className="text-sm text-gray-600">Low Risk</p>
-                      <p className="value text-2xl font-bold">{stats.lowRisk}%</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="risk-card high bg-red-50 p-4 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined icon text-red-600">trending_up</span>
-                    <div className="content">
-                      <p className="text-sm text-gray-600">High Risk</p>
-                      <p className="value text-2xl font-bold">{stats.highRisk}%</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="chart-card">
-                <Chart
-                  type="area"
-                  height={300}
-                  options={chartOptions}
-                  series={chartSeries}
-                />
-              </div>
-            </div>
-
-            {/* Questionnaire Card */}
-            <div className="card questionnaire-card bg-white p-6 rounded-xl shadow-sm">
-              <h2 className="card-title text-xl font-semibold mb-4">Patient Questionnaire</h2>
-              <form className="space-y-4">
-                <div>
-                  <label htmlFor="medical-history" className="block text-sm font-medium text-gray-700 mb-2">
-                    Medical History
-                  </label>
-                  <select
-                    id="medical-history"
-                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                  >
-                    <option>Select condition</option>
-                    <option>Diabetes</option>
-                    <option>Hypertension</option>
-                    <option>Heart Disease</option>
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="symptoms" className="block text-sm font-medium text-gray-700 mb-2">
-                    Current Symptoms
-                  </label>
-                  <textarea
-                    id="symptoms"
-                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                    rows="4"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center"
-                >
-                  Submit Assessment
-                </button>
-              </form>
-            </div>
+        <main className="dashboard-content space-y-6">
+          {/* Risk Data Bar Chart */}
+          <div className="card bg-white p-6 rounded-xl shadow-sm">
+            <h2 className="text-xl font-semibold mb-4">Risk Assessment by Disease</h2>
+            {isLoading ? (
+              <div className="loading-indicator text-center py-8 text-gray-500">Loading data...</div>
+            ) : (
+              <Chart
+                type="bar"
+                height={350}
+                options={chartOptions}
+                series={chartSeries}
+              />
+            )}
           </div>
 
-          {/* Right Column */}
-          <div className="space-y-6">
-            {/* Recent Patients Card */}
-            <div className="card recent-patients-card bg-white p-6 rounded-xl shadow-sm">
-              <h2 className="card-title text-xl font-semibold mb-4">Recent Patients</h2>
-              <div className="recent-patient flex items-center gap-4 p-3 hover:bg-gray-50 rounded-lg cursor-pointer">
-                <div className="avatar w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                  <span className="material-symbols-outlined text-blue-600">person</span>
-                </div>
-                <div className="details">
-                  <h3 className="font-medium">John Doe</h3>
-                  <p className="text-sm text-gray-500">Last visit: Today</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Quick Actions Card */}
-            <div className="card quick-actions-card bg-white p-6 rounded-xl shadow-sm">
-              <h2 className="card-title text-xl font-semibold mb-4">Quick Actions</h2>
-              <div className="grid grid-cols-2 gap-4">
-                <button className="quick-action-button p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors flex flex-col items-center">
-                  <span className="material-symbols-outlined text-blue-600">description</span>
-                  <span className="label text-sm">Export Report</span>
-                </button>
-                <button className="quick-action-button p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors flex flex-col items-center">
-                  <span className="material-symbols-outlined text-blue-600">calendar_today</span>
-                  <span className="label text-sm">Schedule</span>
-                </button>
-              </div>
-            </div>
+          {/* Print Report Button */}
+          <div className="card bg-white p-6 rounded-xl shadow-sm">
+            <button
+              onClick={handlePrintReport}
+              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors w-full"
+            >
+              Print Last Report
+            </button>
           </div>
         </main>
       </div>
