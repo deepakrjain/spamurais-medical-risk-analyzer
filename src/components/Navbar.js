@@ -1,21 +1,28 @@
-import { Link } from 'react-router-dom';
+import React from "react";
+import { Link } from "react-router-dom";
+import "../style.css";
 
-export default function Navbar() {
+const Navbar = () => {
   return (
-    <nav className="bg-white shadow p-4">
-      <div className="flex justify-between items-center container mx-auto">
-        <Link to="/" className="text-xl font-bold">
-          MedRisk AI
-        </Link>
-        <div className="flex space-x-4">
-          <Link to="/" className="hover:text-blue-600">Home</Link>
-          <Link to="/assessment" className="hover:text-blue-600">Assessment</Link>
-          <Link to="/dashboard" className="hover:text-blue-600">Dashboard</Link>
-          <button className="bg-blue-600 text-white px-4 py-2 rounded">
+    <nav className="navbar">
+      <div className="nav-container">
+        <div className="nav-links">
+          <Link to="/" className="nav-link">
+            Home
+          </Link>
+          <Link to="/assessment" className="nav-link">
+            Take Assessment
+          </Link>
+          <Link to="/dashboard" className="nav-link">
+            Dashboard
+          </Link>
+          <button className="login-button">
             Login
           </button>
         </div>
       </div>
     </nav>
   );
-}
+};
+
+export default Navbar;

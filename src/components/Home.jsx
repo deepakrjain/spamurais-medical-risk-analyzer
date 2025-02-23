@@ -1,37 +1,22 @@
 import React from "react";
-import { Link } from "react-router-dom"; // Add this import
+import { Link } from "react-router-dom";
+import Navbar from "./Navbar"; 
 import "../style.css";
-export default function Home() { // Changed from MyPlugin to default export
+export default function Home() { 
   return (
     <div id="webcrumbs">
       <div className="w-[1280px] font-sans relative overflow-hidden">
         {/* ... other elements ... */}
 
-        <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md py-4 border-b">
-          <div className="flex items-center justify-between px-8">
-            {/* ... logo section ... */}
-            <div className="flex items-center gap-8">
-              <Link to="/" className="hover:text-blue-600 transition-colors hover:-translate-y-0.5">
-                Home
-              </Link>
-              <Link to="/assessment" className="bg-blue-600 text-white px-8 py-3 rounded-full text-lg hover:bg-blue-700 transition-all transform hover:scale-105 hover:shadow-xl animate-bounce">
-                Take Assessment
-              </Link>
-              <Link to="/dashboard" className="hover:text-blue-600 transition-colors hover:-translate-y-0.5">
-                Dashboard
-              </Link>
-              <button className="bg-blue-600 text-white px-6 py-2 rounded-full hover:bg-blue-700 transition-all hover:shadow-lg hover:scale-105">
-                Login
-              </button>
-            </div>
-          </div>
-        </nav>
+        <Navbar />
 
         <main className="px-8 py-12">
           <section className="text-center transform translate-y-0 opacity-100 transition-all duration-1000">
             <h1 className="text-6xl font-bold mb-6 animate-fadeIn">AI-Powered Medical Risk Analyzer</h1>
             <p className="text-xl mb-8 max-w-2xl mx-auto animate-slideUp">Advanced artificial intelligence to analyze your health risks and provide personalized insights for better healthcare decisions.</p>
-            <button className="bg-blue-600 text-white px-8 py-3 rounded-full text-lg hover:bg-blue-700 transition-all transform hover:scale-105 hover:shadow-xl animate-bounce">Take Assessment</button>
+            <Link to="/assessment" className="mt-8 bg-blue-600 text-white px-8 py-3 rounded-full hover:bg-blue-700 transition-all hover:shadow-lg hover:scale-105">
+              Take Assessment
+            </Link>
           </section>
 
           <section className="mt-20 grid grid-cols-3 gap-8">
@@ -86,5 +71,5 @@ export default function Home() { // Changed from MyPlugin to default export
         </main>
       </div>
     </div>
-  )
+  );
 }
