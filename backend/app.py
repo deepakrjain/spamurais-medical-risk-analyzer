@@ -7,7 +7,9 @@ from enum import Enum
 from dataclasses import dataclass, field
 from typing import List, Dict, Tuple, Optional, NamedTuple
 from functools import lru_cache
-import re
+import sys
+
+import speech_recognition as sr
 import google.generativeai as genai
 import torch
 import torch.nn.functional as F
@@ -16,18 +18,42 @@ import firebase_admin
 from firebase_admin import credentials, db
 from transformers import AutoTokenizer, AutoModel
 
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+
 warnings.filterwarnings("ignore")
 
+# ---------------------------
+# Speech to Text Functionality
+# ---------------------------
+def speech_to_text():
+    recognizer = sr.Recognizer()
+    with sr.Microphone() as source:
+        print("Listening... Please describe your symptoms.")
+        recognizer.adjust_for_ambient_noise(source)
+        try:
+            audio = recognizer.listen(source, timeout=10)
+            text = recognizer.recognize_google(audio)
+            print(f"You said: {text}")
+            return text
+        except sr.UnknownValueError:
+            print("Sorry, I could not understand the audio.")
+            return None
+        except sr.RequestError:
+            print("Could not request results, please check your internet connection.")
+            return None
+
+# ---------------------------
 # Configuration
+# ---------------------------
 GEMINI_API_KEY = "AIzaSyBXhmG_ysIXPNDliA8EDWwRAO8FrUzMh7k"
 FIREBASE_CRED_PATH = "C:\\Users\\Deepak\\Downloads\\medicalriskanalyzer-5c37e4bd5968.json"
 MODEL_NAME = "emilyalsentzer/Bio_ClinicalBERT"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-FINAL_SYMPTOM_THRESHOLD = 7
+FINAL_SYMPTOM_THRESHOLD = 5
 CACHE_SIZE = 1024
-QUANTIZE_MODEL = False  # Disabled quantization # Embedding cache size
+QUANTIZE_MODEL = False
 
-# Medical APIs
 MEDICAL_APIS = {
     "cdc_guidelines": "https://data.cdc.gov/resource/9mfq-cb36.json",
     "who_guidelines": "https://ghoapi.azureedge.net/api/Indicator",
@@ -45,7 +71,9 @@ if not firebase_admin._apps:
     firebase_admin.initialize_app(cred, {'databaseURL': 'https://medicalriskanalyzer-default-rtdb.firebaseio.com'})
 logging.info("Firebase initialized successfully")
 
-# Data classes and Enums
+# ---------------------------
+# Data Classes and Enums
+# ---------------------------
 class Severity(Enum):
     LOW = "low"
     MODERATE = "moderate"
@@ -82,6 +110,9 @@ class ConsultationState:
         self.symptoms.append(cleaned)
         logging.info(f"Added symptom: {cleaned}")
 
+# ---------------------------
+# Guideline Integrator
+# ---------------------------
 class GuidelineIntegrator:
     def __init__(self):
         self.guideline_cache = {}
@@ -138,6 +169,9 @@ class GuidelineIntegrator:
             logging.error(f"Drug Interaction API Error: {e}")
             return None
 
+# ---------------------------
+# Medical Reasoner
+# ---------------------------
 class MedicalReasoner:
     def __init__(self):
         self.tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
@@ -145,47 +179,48 @@ class MedicalReasoner:
         self.model.eval()
         self.guideline_client = GuidelineIntegrator()
         self.condition_map = {
-    "cardiac": [
-        "chest pain/pressure", "shortness of breath (SOB)", "palpitations", 
-        "diaphoresis", "radiating arm pain", "syncope", "orthopnea", "edema"
-    ],
-    "respiratory": [
-        "productive cough", "hemoptysis", "wheezing", "tachypnea", 
-        "pleuritic pain", "hypoxia", "cyanosis", "sputum production"
-    ],
-    "gastrointestinal": [
-        "epigastric pain", "hematochezia", "melena", "dysphagia", 
-        "jaundice", "abdominal distension", "rebound tenderness", 
-        "blood in stool"
-    ],
-    "neurological": [
-        "thunderclap headache", "photophobia", "hemiparesis", "ataxia",
-        "aphasia", "vertigo", "tinnitus", "seizure activity"
-    ],
-    "endocrine": [
-        "polyuria", "polydipsia", "heat intolerance", "cold intolerance",
-        "unintended weight loss", "buffalo hump", "moon facies", 
-        "extremity swelling"
-    ],
-    "musculoskeletal": [
-        "joint erythema", "reduced ROM", "crepitus", "myalgia",
-        "back stiffness", "trigger points", "joint instability", 
-        "morning stiffness"
-    ],
-    "infectious": [
-        "fever of unknown origin (FUO)", "night sweats", "lymphadenopathy",
-        "purulent discharge", "malaise", "rigors", "travel history", 
-        "animal exposure"
-    ],
-    "dermatological": [
-        "erythema migrans", "target lesions", "petechiae", "urticaria",
-        "vesicular rash", "pustules", "ecchymosis", "skin necrosis"
-    ],
-    "hematological": [
-        "pallor", "easy bruising", "blood in urine", "menorrhagia",
-        "fatigue", "splenomegaly", "petechiae", "bone pain"
-    ]
-}
+            "cardiac": [
+                "chest pain/pressure", "shortness of breath (SOB)", "palpitations", 
+                "diaphoresis", "radiating arm pain", "syncope", "orthopnea", "edema"
+            ],
+            "respiratory": [
+                "productive cough", "hemoptysis", "wheezing", "tachypnea", 
+                "pleuritic pain", "hypoxia", "cyanosis", "sputum production"
+            ],
+            "gastrointestinal": [
+                "epigastric pain", "hematochezia", "melena", "dysphagia", 
+                "jaundice", "abdominal distension", "rebound tenderness", 
+                "blood in stool"
+            ],
+            "neurological": [
+                "thunderclap headache", "photophobia", "hemiparesis", "ataxia",
+                "aphasia", "vertigo", "tinnitus", "seizure activity"
+            ],
+            "endocrine": [
+                "polyuria", "polydipsia", "heat intolerance", "cold intolerance",
+                "unintended weight loss", "buffalo hump", "moon facies", 
+                "extremity swelling"
+            ],
+            "musculoskeletal": [
+                "joint erythema", "reduced ROM", "crepitus", "myalgia",
+                "back stiffness", "trigger points", "joint instability", 
+                "morning stiffness"
+            ],
+            "infectious": [
+                "fever of unknown origin (FUO)", "night sweats", "lymphadenopathy",
+                "purulent discharge", "malaise", "rigors", "travel history", 
+                "animal exposure"
+            ],
+            "dermatological": [
+                "erythema migrans", "target lesions", "petechiae", "urticaria",
+                "vesicular rash", "pustules", "ecchymosis", "skin necrosis"
+            ],
+            "hematological": [
+                "pallor", "easy bruising", "blood in urine", "menorrhagia",
+                "fatigue", "splenomegaly", "petechiae", "bone pain"
+            ]
+        }
+
     def _load_quantized_model(self):
         model = AutoModel.from_pretrained(MODEL_NAME)
         if QUANTIZE_MODEL:
@@ -205,10 +240,8 @@ class MedicalReasoner:
             truncation=True,
             return_tensors="pt"
         ).to(DEVICE)
-        
         with torch.no_grad(), torch.cuda.amp.autocast():
             outputs = self.model(**inputs)
-            
         return F.max_pool1d(
             outputs.last_hidden_state.transpose(1, 2),
             kernel_size=outputs.last_hidden_state.size(1)
@@ -229,11 +262,9 @@ class MedicalReasoner:
         symptom_embeddings = [self._get_cached_embedding(s[:128]) for s in symptoms]
         if not symptom_embeddings:
             return 0.0
-            
         avg_embedding = torch.mean(torch.stack(symptom_embeddings), dim=0)
         guideline_score = 0.4 if any(self.get_relevant_guidelines(symptoms).values()) else 0
         symptom_coherence = torch.std(avg_embedding).item()
-        
         return min(
             0.4 * guideline_score +
             0.3 * (len(symptoms) / 5) +
@@ -244,38 +275,24 @@ class MedicalReasoner:
     def generate_differential(self, symptoms: List[str]) -> List[Dict]:
         symptom_embeddings = {s: self._get_cached_embedding(s) for s in symptoms}
         differentials = []
-        
-        # Expanded condition map for neurological issues
-        self.condition_map["neurological"].extend([
-            "headache", "migraine", "tension headache",
-            "cluster headache", "sinus headache"
-        ])
-        
-        # Lower similarity threshold
         for condition, keywords in self.condition_map.items():
             keyword_embeddings = [self._get_cached_embedding(k) for k in keywords]
-            if not keyword_embeddings:
-                continue
-                
             sim_matrix = torch.cdist(
                 torch.stack(list(symptom_embeddings.values())),
                 torch.stack(keyword_embeddings)
             )
-            # Adjusted threshold from 0.6 to 0.4
             max_sim = torch.max(1 - sim_matrix).item()
-            
-            if max_sim > 0.4:  # Lowered threshold
+            if max_sim > 0.6:
                 differentials.append({
                     "condition": condition,
                     "confidence": min(max_sim * 1.2, 0.95),
-                    "key_symptoms": [
-                        symptoms[i] for i in torch.argmin(sim_matrix, dim=0)
-                        if i < len(symptoms)
-                    ]
+                    "key_symptoms": [symptoms[i] for i in torch.argmin(sim_matrix, dim=0)]
                 })
-        
         return sorted(differentials, key=lambda x: x["confidence"], reverse=True)[:5]
 
+# ---------------------------
+# Medical Assistant
+# ---------------------------
 class MedicalAssistant:
     def __init__(self):
         self.reasoner = MedicalReasoner()
@@ -284,11 +301,9 @@ class MedicalAssistant:
         text = text.strip().lower()
         if not text:
             return "Please describe your symptoms.", "What symptoms are you experiencing?", 0.0, False
-        
         state.add_symptom(text)
         state.potential_diagnoses = self.reasoner.generate_differential(state.symptoms)
         state.confidence = self.reasoner.calculate_confidence(state.symptoms, f"Symptoms: {state.symptoms}")
-        
         if len(state.symptoms) >= FINAL_SYMPTOM_THRESHOLD:
             return self._generate_final_assessment(state), "", state.confidence, True
         else:
@@ -298,31 +313,6 @@ class MedicalAssistant:
                 state.confidence,
                 False
             )
-    def _parse_diagnosis_data(self, response_text: str) -> List[Dict]:
-        """Parse Gemini response to extract structured diagnosis data"""
-        pattern = r'• Diagnosis \d+: (.+?) \((\d+)%\)'
-        matches = re.findall(pattern, response_text)
-        return [{
-            'disease_name': name.strip(),
-            'probability': float(percentage)
-        } for name, percentage in matches]
-    
-    def _save_to_firebase(self, diagnoses: List[Dict], state: ConsultationState):
-        """Save diagnosis data to Firebase Realtime Database"""
-        try:
-            diagnosis_data = {
-                'timestamp': datetime.now().isoformat(),
-                'patient_info': state.patient_info,
-                'diagnoses': diagnoses,
-                'confidence_score': state.confidence
-            }
-            
-            ref = db.reference('/diagnosis_history')
-            new_ref = ref.push()
-            new_ref.set(diagnosis_data)
-            logging.info("Saved diagnosis to Firebase")
-        except Exception as e:
-            logging.error(f"Firebase save failed: {e}")
 
     def _generate_final_assessment(self, state: ConsultationState) -> str:
         guidelines = self.reasoner.get_relevant_guidelines(state.symptoms)
@@ -351,49 +341,34 @@ Rules:
 """
         try:
             response = gemini.generate_content(prompt)
-            cleaned_response = self._clean_response(response.text)
-            
-            # New parsing and saving logic
-            diagnoses = self._parse_diagnosis_data(cleaned_response)
-            if diagnoses:
-                self._save_to_firebase(diagnoses, state)
-                
-            return cleaned_response
+            return self._clean_response(response.text)
         except Exception as e:
             logging.error(f"Gemini Error: {e}")
             return "Critical: Requires immediate medical evaluation."
 
     def _generate_response(self, state: ConsultationState) -> str:
         guidelines = self.reasoner.get_relevant_guidelines(state.symptoms)
-        prompt = f"""**Structured Clinical Analysis Required**
-    Patient: {state.patient_info['age']}yo {state.patient_info['gender']}
-    Symptoms: {', '.join(state.symptoms)}
+        prompt = f"""**Clinical Analysis Template**
+Patient: {state.patient_info['age']}yo {state.patient_info['gender']}
+Symptoms: {', '.join(state.symptoms[-3:])}
 
-    You MUST format your response EXACTLY like this:
+Required Output Format:
+[LIKELY CONDITIONS]
+1. {{Condition}} ({{confidence}}%)
+2. {{Condition}} ({{confidence}}%)
 
-    [LIKELY CONDITIONS]
-    1. Primary Diagnosis (XX%)
-    2. Secondary Diagnosis (YY%)
+[IMMEDIATE ACTIONS]
+- {{Action}}
+- {{Action}}
 
-    [IMMEDIATE ACTIONS]
-    - First recommended action
-    - Second recommended action
+[RED FLAGS]
+! {{Warning}}
+! {{Warning}}
 
-    [RED FLAGS]
-    ! Critical warning sign 1
-    ! Critical warning sign 2
-
-    Base this on:
-    - Current Potential Diagnoses: {state.potential_diagnoses}
-    - CDC Guidelines: {json.dumps(guidelines['cdc'])[:300]}
-    - WHO Recommendations: {json.dumps(guidelines['who'])[:300]}
-
-    Rules:
-    1. ALWAYS include ALL THREE sections
-    2. If no clear diagnoses, list 'Further evaluation needed' in likely conditions
-    3. Percentages must sum to <=100%
-    4. List at least 2 items per section
-    """
+Guidelines:
+- CDC: {json.dumps(guidelines['cdc'])[:300]}
+- WHO: {json.dumps(guidelines['who'])[:300]}
+"""
         try:
             response = gemini.generate_content(prompt)
             return self._clean_response(response.text)
@@ -416,61 +391,71 @@ Format:
             return "Any additional symptoms?"
 
     def _clean_response(self, text: str) -> str:
-        # Enhanced section detection with fuzzy matching
-        sections = {
-            "LIKELY CONDITIONS": [],
-            "IMMEDIATE ACTIONS": [],  # Handle typo
-            "IMMEDIATE ACTIONS": [],
-            "RED FLAGS": []
-        }
-        current_section = None
-        text = text.replace("**", "").replace("__", "").replace("•", "-").strip()
-        
+        text = text.replace("**", "").replace("__", "").strip()
+        lines = []
+        counter = 0
         for line in text.split('\n'):
-            line = line.strip()
-            if not line:
-                continue
+            if line.strip().startswith(('-', '•', '!', '[', '1.', '2.', '3.')):
+                lines.append(line.strip())
+                counter += 1
+            if counter >= 6:
+                break
+        return '\n'.join(lines[:6])
 
-            # Fuzzy section header detection
-            clean_line = line.lower().replace("[", "").replace("]", "").strip()
-            if "likely condition" in clean_line:
-                current_section = "LIKELY CONDITIONS"
-                continue
-            elif "immediate action" in clean_line:
-                current_section = "IMMEDIATE ACTIONS"
-                continue
-            elif "red flag" in clean_line:
-                current_section = "RED FLAGS"
-                continue
-                
-            if current_section and line:
-                sections[current_section].append(line)
-
-        # Build output preserving order
-        output = []
-        if sections["LIKELY CONDITIONS"]:
-            output.append("[LIKELY CONDITIONS]")
-            output.extend(sections["LIKELY CONDITIONS"])
-        if sections["IMMEDIATE ACTIONS"]:
-            output.append("\n[IMMEDIATE ACTIONS]")
-            output.extend(sections["IMMEDIATE ACTIONS"])
-        if sections["RED FLAGS"]:
-            output.append("\n[RED FLAGS]")
-            output.extend(sections["RED FLAGS"])
-        
-        return '\n'.join(output) if any(sections.values()) else "No clear diagnosis."
     def _clean_question(self, text: str) -> str:
-        # Extract only the question part
         if '[QUESTION]' in text:
             return text.split('[QUESTION]')[-1].strip().strip('"')
         return text.strip().strip('"')
-    
-    
 
+# ---------------------------
+# Flask API Endpoint (for React Integration)
+# ---------------------------
+app = Flask(__name__)
+CORS(app)
+
+assistant = MedicalAssistant()  # Global instance for API use
+
+@app.route('/process', methods=['POST'])
+def process():
+    data = request.json
+    text = data.get("text", "")
+    state_data = data.get("state", {})
+    state = ConsultationState(
+        symptoms=state_data.get("symptoms", []),
+        asked_questions=state_data.get("asked_questions", []),
+        potential_diagnoses=state_data.get("potential_diagnoses", []),
+        risk_level=state_data.get("risk_level", "low"),
+        confidence=state_data.get("confidence", 0.0),
+        clinical_context=state_data.get("clinical_context", {}),
+        patient_info=state_data.get("patient_info", {}),
+        conversation_history=state_data.get("conversation_history", [])
+    )
+    response_text, question, conf, finalized = assistant.process_input(text, state)
+    updated_state = {
+        "symptoms": state.symptoms,
+        "asked_questions": state.asked_questions,
+        "potential_diagnoses": state.potential_diagnoses,
+        "risk_level": state.risk_level,
+        "confidence": state.confidence,
+        "clinical_context": state.clinical_context,
+        "patient_info": state.patient_info,
+        "conversation_history": state.conversation_history
+    }
+    return jsonify({
+        "assessment": response_text,
+        "question": question,
+        "confidence": conf,
+        "finalized": finalized,
+        "updatedState": updated_state
+    })
+
+# ---------------------------
+# CLI Main Functionality
+# ---------------------------
 def main():
     print("Welcome to the Advanced Medical Assistant CLI")
     print("Type 'exit' to quit.\n")
-    
+
     state = ConsultationState(
         symptoms=[],
         asked_questions=[],
@@ -480,14 +465,14 @@ def main():
         clinical_context={},
         patient_info={}
     )
-    
+
     # Collect initial patient info with validation
     required_fields = {
         "age": lambda x: x.isdigit() and 0 <= int(x) <= 120,
         "gender": lambda x: x.lower() in ["male", "female", "other"],
         "medical_history": lambda x: len(x) > 0
     }
-    
+
     for field, validator in required_fields.items():
         while True:
             value = input(f"{field.replace('_', ' ').title()}: ")
@@ -495,17 +480,23 @@ def main():
                 state.patient_info[field] = value
                 break
             print(f"Invalid {field}. Please try again.")
-    
-    assistant = MedicalAssistant()
-    
+
+    assistant_cli = MedicalAssistant()
+
     while True:
-        user_input = input("\nDescribe your symptoms: ")
+        use_speech = input("Would you like to describe your symptoms using speech? (yes/no): ").strip().lower()
+        if use_speech == "yes":
+            user_input = speech_to_text()
+            if user_input is None:
+                continue
+        else:
+            user_input = input("\nDescribe your symptoms: ")
         if user_input.strip().lower() == "exit":
             print("Exiting. Stay safe!")
             break
-        
+
         try:
-            response, question, conf, finalized = assistant.process_input(user_input, state)
+            response, question, conf, finalized = assistant_cli.process_input(user_input, state)
             print("\nMedical Assessment:")
             print(response)
             if not finalized:
@@ -514,7 +505,7 @@ def main():
             print(f"\nAnalysis Confidence: {conf:.2f}")
             print("\nPotential Diagnoses:", state.potential_diagnoses)
             print("\n" + "-" * 80 + "\n")
-            
+
             if finalized:
                 print("Final assessment generated. Consultation complete.")
                 break
@@ -522,5 +513,12 @@ def main():
             logging.error(f"Error in main loop: {e}")
             print("An error occurred. Please try again.")
 
+# ---------------------------
+# Entry Point
+# ---------------------------
 if __name__ == "__main__":
-    main()
+    # Run in Flask server mode if "server" argument is provided, else run CLI
+    if len(sys.argv) > 1 and sys.argv[1] == "server":
+        app.run(port=5000, debug=True)
+    else:
+        main()
