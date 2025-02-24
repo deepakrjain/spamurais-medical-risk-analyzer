@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import "../style.css";
-import Navbar from './Navbar.js'; // Import Navbar component
+import Navbar from './Navbar'; // Import Navbar component
 
 // Function to parse text and replace *text* with <strong>text</strong>
 const formatMessageContent = (content) => {

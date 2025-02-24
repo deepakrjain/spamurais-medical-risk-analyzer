@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Chart from 'react-apexcharts';
-import Navbar from './Navbar.js'; // Import Navbar component
+import Navbar from './Navbar'; // Import Navbar component
 import { db } from '../firebase.js'; // Assume you have set up Firebase correctly
 import "../style.css";
 
