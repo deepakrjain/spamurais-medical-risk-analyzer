@@ -298,7 +298,7 @@ class MedicalAssistant:
 Patient: {state.patient_info.get('age', 'N/A')}yo {state.patient_info.get('gender', 'N/A')}
 Symptoms: {', '.join(state.symptoms)}
 
-Generate EXACTLY 4 diagnoses. For each diagnosis, provide an exact percentage risk between 1-100%.
+Generate exactly 3 diagnoses. For each diagnosis, provide an exact percentage risk between 1-100% such that the total sums exactly to 100%.
 
 Output Format:
 • Diagnosis 1: {{Condition}} ({{X}}%)
@@ -307,15 +307,13 @@ Output Format:
   - Key Features: {{Features}}
 • Diagnosis 3: {{Condition}} ({{Z}}%)
   - Key Features: {{Features}}
-• Diagnosis 4: {{Condition}} ({{W}}%)
-  - Key Features: {{Features}}
 
 Rules:
-1. MUST provide exactly 4 diagnoses
-2. Each diagnosis MUST include a numerical percentage
-3. Percentages should sum to approximately 100%
-4. Use medical abbreviations where appropriate
-5. List most likely diagnosis first, descending order of probability
+1. Must provide 3 diagnoses.
+2. Each diagnosis must include a numerical percentage risk.
+3. The percentages must sum to exactly 100%.
+4. Use medical abbreviations where appropriate.
+5. List the most likely diagnosis first in descending order of probability.
 """
         try:
             response = gemini.generate_content(prompt)
@@ -333,6 +331,7 @@ Symptoms: {', '.join(state.symptoms[-3:])}
 Required Output Format:
 [LIKELY CONDITIONS]
 1. {{Condition}} ({{confidence}}%)
+2. {{Condition}} ({{confidence}}%)
 2. {{Condition}} ({{confidence}}%)
 
 [IMMEDIATE ACTIONS]

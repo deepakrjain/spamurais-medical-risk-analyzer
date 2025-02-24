@@ -39,9 +39,7 @@ from enum import Enum
 from dataclasses import dataclass, field
 from typing import List, Dict, Tuple, Optional, NamedTuple
 from functools import lru_cache
-import sys
 
-import speech_recognition as sr
 import google.generativeai as genai
 import torch
 import torch.nn.functional as F
@@ -54,26 +52,6 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 warnings.filterwarnings("ignore")
-
-# ---------------------------
-# Speech to Text Functionality
-# ---------------------------
-def speech_to_text():
-    recognizer = sr.Recognizer()
-    with sr.Microphone() as source:
-        print("Listening... Please describe your symptoms.")
-        recognizer.adjust_for_ambient_noise(source)
-        try:
-            audio = recognizer.listen(source, timeout=10)
-            text = recognizer.recognize_google(audio)
-            print(f"You said: {text}")
-            return text
-        except sr.UnknownValueError:
-            print("Sorry, I could not understand the audio.")
-            return None
-        except sr.RequestError:
-            print("Could not request results, please check your internet connection.")
-            return None
 
 # ---------------------------
 # Configuration
@@ -349,7 +327,7 @@ class MedicalAssistant:
     def _generate_final_assessment(self, state: ConsultationState) -> str:
         guidelines = self.reasoner.get_relevant_guidelines(state.symptoms)
         prompt = f"""**Final Differential Diagnosis**
-Patient: {state.patient_info['age']}yo {state.patient_info['gender']}
+Patient: {state.patient_info.get('age', 'N/A')}yo {state.patient_info.get('gender', 'N/A')}
 Symptoms: {', '.join(state.symptoms)}
 
 Generate EXACTLY 4 diagnoses. For each diagnosis, provide an exact percentage risk between 1-100%.
@@ -381,7 +359,7 @@ Rules:
     def _generate_response(self, state: ConsultationState) -> str:
         guidelines = self.reasoner.get_relevant_guidelines(state.symptoms)
         prompt = f"""**Clinical Analysis Template**
-Patient: {state.patient_info['age']}yo {state.patient_info['gender']}
+Patient: {state.patient_info.get('age', 'N/A')}yo {state.patient_info.get('gender', 'N/A')}
 Symptoms: {', '.join(state.symptoms[-3:])}
 
 Required Output Format:
@@ -440,120 +418,58 @@ Format:
         return text.strip().strip('"')
 
 # ---------------------------
-# Flask API Endpoint (for React Integration)
+# Flask API Setup for Frontend Integration
 # ---------------------------
 app = Flask(__name__)
 CORS(app)
 
-assistant = MedicalAssistant()  # Global instance for API use
+assistant = MedicalAssistant()  # Global instance
 
-@app.route('/process', methods=['POST'])
-def process():
+@app.route('/api/process-input', methods=['POST'])
+def process_input():
     data = request.json
     text = data.get("text", "")
     state_data = data.get("state", {})
+
+    # Convert camelCase keys from front-end to snake_case for ConsultationState
     state = ConsultationState(
-        symptoms=state_data.get("symptoms", []),
-        asked_questions=state_data.get("asked_questions", []),
-        potential_diagnoses=state_data.get("potential_diagnoses", []),
-        risk_level=state_data.get("risk_level", "low"),
-        confidence=state_data.get("confidence", 0.0),
-        clinical_context=state_data.get("clinical_context", {}),
-        patient_info=state_data.get("patient_info", {}),
-        conversation_history=state_data.get("conversation_history", [])
+        symptoms = state_data.get("symptoms", []),
+        asked_questions = state_data.get("askedQuestions", []),
+        potential_diagnoses = state_data.get("potentialDiagnoses", []),
+        risk_level = state_data.get("riskLevel", "low"),
+        confidence = state_data.get("confidence", 0.0),
+        clinical_context = state_data.get("clinicalContext", {}),
+        patient_info = state_data.get("patientInfo", {}),
+        conversation_history = state_data.get("conversationHistory", [])
     )
+
     response_text, question, conf, finalized = assistant.process_input(text, state)
+
+    # Convert state back to camelCase for the front-end
     updated_state = {
         "symptoms": state.symptoms,
-        "asked_questions": state.asked_questions,
-        "potential_diagnoses": state.potential_diagnoses,
-        "risk_level": state.risk_level,
+        "askedQuestions": state.asked_questions,
+        "potentialDiagnoses": state.potential_diagnoses,
+        "riskLevel": state.risk_level,
         "confidence": state.confidence,
-        "clinical_context": state.clinical_context,
-        "patient_info": state.patient_info,
-        "conversation_history": state.conversation_history
+        "clinicalContext": state.clinical_context,
+        "patientInfo": state.patient_info,
+        "conversationHistory": state.conversation_history
     }
+
     return jsonify({
         "assessment": response_text,
         "question": question,
         "confidence": conf,
         "finalized": finalized,
-        "updatedState": updated_state
+        "state": updated_state
     })
 
 # ---------------------------
-# CLI Main Functionality
-# ---------------------------
-def main():
-    print("Welcome to the Advanced Medical Assistant CLI")
-    print("Type 'exit' to quit.\n")
-
-    state = ConsultationState(
-        symptoms=[],
-        asked_questions=[],
-        potential_diagnoses=[],
-        risk_level="low",
-        confidence=0.0,
-        clinical_context={},
-        patient_info={}
-    )
-
-    # Collect initial patient info with validation
-    required_fields = {
-        "age": lambda x: x.isdigit() and 0 <= int(x) <= 120,
-        "gender": lambda x: x.lower() in ["male", "female", "other"],
-        "medical_history": lambda x: len(x) > 0
-    }
-
-    for field, validator in required_fields.items():
-        while True:
-            value = input(f"{field.replace('_', ' ').title()}: ")
-            if validator(value):
-                state.patient_info[field] = value
-                break
-            print(f"Invalid {field}. Please try again.")
-
-    assistant_cli = MedicalAssistant()
-
-    while True:
-        use_speech = input("Would you like to describe your symptoms using speech? (yes/no): ").strip().lower()
-        if use_speech == "yes":
-            user_input = speech_to_text()
-            if user_input is None:
-                continue
-        else:
-            user_input = input("\nDescribe your symptoms: ")
-        if user_input.strip().lower() == "exit":
-            print("Exiting. Stay safe!")
-            break
-
-        try:
-            response, question, conf, finalized = assistant_cli.process_input(user_input, state)
-            print("\nMedical Assessment:")
-            print(response)
-            if not finalized:
-                print("\nFollow-Up Question:")
-                print(question)
-            print(f"\nAnalysis Confidence: {conf:.2f}")
-            print("\nPotential Diagnoses:", state.potential_diagnoses)
-            print("\n" + "-" * 80 + "\n")
-
-            if finalized:
-                print("Final assessment generated. Consultation complete.")
-                break
-        except Exception as e:
-            logging.error(f"Error in main loop: {e}")
-            print("An error occurred. Please try again.")
-
-# ---------------------------
-# Entry Point
+# Run Flask Server
 # ---------------------------
 if __name__ == "__main__":
-    # Run in Flask server mode if "server" argument is provided, else run CLI
-    if len(sys.argv) > 1 and sys.argv[1] == "server":
-        app.run(port=5000, debug=True)
-    else:
-        main()
+    app.run(port=5000, debug=True)
 ```
 
 # index.html
@@ -564,7 +480,7 @@ if __name__ == "__main__":
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>React App</title>
+    <title>MedShastra AI</title>
   </head>
   <body>
     <div id="root"></div>
